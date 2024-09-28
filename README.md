@@ -4,7 +4,7 @@ Create custom CDG files for karaoke.
 
 In August 2024, I had the idea to make custom karaoke files for songs I wanted
 to perform at a local karaoke bar, but couldn’t. And starting in September 2024,
-[that idea was real](https://winslowjosiah.com/karaoke/).
+[that idea was real](https://winslowjosiah.com/blog/2024/09/29/i-made-a-cdg-karaoke-maker/).
 
 This is the custom Python program I wrote in order to do it. It's not the most
 featureful or easy-to-use thing in the world, but it's robust enough to make
