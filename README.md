@@ -149,13 +149,13 @@ called `lyrics` at the top level.
 >
 >     :::text
 >     1 | Sum/mer lov/in',
->     1 | had me a blast/_
+>     1 | had me a blast/
 >     2 | Sum/mer lov/in',
->     2 | hap/pened so fast/_
+>     2 | hap/pened so fast/
 >     1 | I met a girl
->     1 | cra/zy for me/_
+>     1 | cra/zy for me/
 >     2 | Met a boy,
->     2 | cute as can be/_
+>     2 | cute as can be/
 >     3 | Sum/mer days
 >     3 | drift/in' a/way
 >     3 | To, uh oh,
