@@ -250,19 +250,18 @@ def render_lines_and_masks(
     line_masks: list[list[Image.Image]] = []
     logger.debug("rendering/cropping masks")
     for line, bbox in zip(lines, bboxes):
-        # HACK For whatever reason, the text is sometimes 1 pixel off,
-        # and for whatever, reason, adding certain characters that show
-        # up later in the string seems to fix it.
-        # REVIEW More testing is needed. Will this always work? Which
-        # characters does this happen for? Why does this even happen?
-        extra_text = ""
+        # HACK For whatever reason, the presence or absence of certain
+        # characters of text can cause the rendered text to be 1 pixel
+        # off. We fix this by adding the entire rest of the text after
+        # each rendered part of it, so this mysterious offset is at
+        # least consistent.
+        extra_text = "".join(line)
         # NOTE We will prefix the extra text with way more spaces than
         # necessary, so it doesn't show up in the mask images.
-        text_padding = ""
-        for char in "t!":
-            if char in "".join(line):
-                text_padding = " " * bbox[2]
-                extra_text += char
+        text_padding = " " * bbox[2]
+        # REVIEW More testing is needed. Which characters does this
+        # happen for? Why does this even happen?
+        # Using Old Sans Black, this happens with at least "t" and "!".
 
         # Get masks of the line's text from the start up to each
         # syllable
