@@ -1271,9 +1271,9 @@ class KaraokeComposer:
         logger.info("composing instrumental section")
         self.writer.queue_packets([
             *memory_preset_repeat(0),
+            # TODO Add option for borders in instrumentals
+            border_preset(0),
         ])
-        if self.config.border is not None:
-            self.writer.queue_packet(border_preset(self.BORDER))
 
         logger.debug("rendering instrumental text")
         text = instrumental.text.split("\n")
