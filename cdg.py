@@ -71,9 +71,9 @@ class CDGWriter:
 
     def write_packets(self, stream: BinaryIO):
         for packet in self.packets:
-            self._write_packet(stream, packet)
+            self.write_packet(stream, packet)
 
-    def _write_packet(self, stream: BinaryIO, packet: CDGPacket):
+    def write_packet(self, stream: BinaryIO, packet: CDGPacket):
         stream.write((CDG_COMMAND if packet.command else 0x00).to_bytes())
         stream.write(packet.instruction.value.to_bytes())
         stream.write(CDG_PARITY.to_bytes() * 2)
