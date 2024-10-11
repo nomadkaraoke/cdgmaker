@@ -57,7 +57,6 @@ class CDGPacket(NamedTuple):
 class CDGWriter:
     def __init__(self):
         self.packets: list[CDGPacket] = []
-        self.packets_written = 0
 
     def queue_packet(self, packet: CDGPacket):
         self.packets.append(packet)
@@ -73,8 +72,6 @@ class CDGWriter:
     def write_packets(self, stream: BinaryIO):
         for packet in self.packets:
             self._write_packet(stream, packet)
-        self.packets_written += len(self.packets)
-        self.packets.clear()
 
     def _write_packet(self, stream: BinaryIO, packet: CDGPacket):
         stream.write((CDG_COMMAND if packet.command else 0x00).to_bytes())
