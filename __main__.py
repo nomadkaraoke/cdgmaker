@@ -336,6 +336,8 @@ class KaraokeComposer:
                 for line in lyric.lines:
                     line.y += line_offset
 
+        self.sync_offset = sync_to_cdg(self.config.sync_offset)
+
         self.writer = CDGWriter()
         logger.info("config settings loaded")
 
@@ -744,7 +746,7 @@ class KaraokeComposer:
         # this, however, is by (mostly) copy-pasting the code that
         # checks for instrumental sections. I shouldn't do it this way.
         current_time = (
-            self.writer.packets_queued + self.config.sync_offset
+            self.writer.packets_queued - self.sync_offset
             - self.intro_delay
         )
         should_instrumental = False
@@ -884,7 +886,7 @@ class KaraokeComposer:
             composer_state: ComposerState,
     ):
         current_time = (
-            self.writer.packets_queued + self.config.sync_offset
+            self.writer.packets_queued - self.sync_offset
             - self.intro_delay
         )
 
@@ -1486,7 +1488,7 @@ class KaraokeComposer:
 
         # Wait until the next line should be drawn
         current_time = (
-            self.writer.packets_queued + self.config.sync_offset
+            self.writer.packets_queued - self.sync_offset
             - self.intro_delay
         )
         end_time = end - 16

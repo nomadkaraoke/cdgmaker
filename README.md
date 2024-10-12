@@ -60,7 +60,8 @@ the format of the intro screen easily configurable.
     - `"page"` (clear screen after each page)
     - `"delayed"` (wait to draw new lines as long as possible)
     - `"eager"` (draw new lines as soon as possible).
-- **sync_offset** _(default 0)_: The offset from which to start the sync.
+- **sync_offset** _(default 0)_: The offset from which to start the sync. Each
+    sync point will be brought forward in time by this amount.
 - **highlight_bandwidth** _(default 1)_: The relative number of packets used for
     highlighting text during each update. If this number is higher than
     **draw_bandwidth**, more time is spent on highlighting than drawing/erasing.
