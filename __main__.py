@@ -699,8 +699,8 @@ class KaraokeComposer:
     # !SECTION
     #endregion
 
-    #region Compose
-    # SECTION Compose
+    #region Compose words
+    # SECTION Compose words
     def compose(self):
         # NOTE Logistically, multiple simultaneous lyric sets doesn't
         # make sense if the lyrics are being cleared by page.
@@ -1264,7 +1264,11 @@ class KaraokeComposer:
                 [left_edge] + highlight_progress + [right_edge]
             )
         ]
+    # !SECTION
+    #endregion
 
+    #region Compose pictures
+    # SECTION Compose pictures
     def _compose_instrumental(
             self,
             instrumental: SettingsInstrumental,
@@ -1454,7 +1458,7 @@ class KaraokeComposer:
             # Paste existing screen text onto axis-aligned image
             aligned_background_image.paste(
                 screen,
-                (padleft-instrumental.x, padtop-instrumental.y),
+                (padleft - instrumental.x, padtop - instrumental.y),
                 # NOTE This masks out the 0 pixels.
                 mask=screen.point(lambda v: v and 255, mode="1"),
             )
@@ -1463,6 +1467,12 @@ class KaraokeComposer:
             packets = image_to_packets(
                 aligned_background_image,
                 (instrumental.x - padleft, instrumental.y - padtop),
+                background=screen.crop((
+                    instrumental.x - padleft,
+                    instrumental.y - padtop,
+                    instrumental.x - padleft + aligned_background_image.width,
+                    instrumental.y - padtop + aligned_background_image.height,
+                )),
             )
             logger.debug(
                 "instrumental background image packed in "
@@ -1717,11 +1727,7 @@ winslowjosiah@gmail.com""",
         self.writer.queue_packets(
             [no_instruction()] * (end - self.writer.packets_queued)
         )
-    # !SECTION
-    #endregion
 
-    #region Miscellaneous
-    # SECTION Miscellaneous
     def _load_image(
             self,
             image_path: "StrOrBytesPath | Path",
@@ -1749,6 +1755,18 @@ winslowjosiah@gmail.com""",
             ),
             dither=Image.Dither.FLOYDSTEINBERG,
         )
+        # Further reduce colors to conform to 12-bit RGB palette
+        image.putpalette([
+            # HACK The RGB values of the colors that show up in CDG
+            # players are repdigits in hexadecimal - 0x00, 0x11, 0x22,
+            # 0x33, etc. This means that we can simply round each value
+            # to the nearest multiple of 0x11 (17 in decimal).
+            0x11 * round(v / 0x11)
+            for v in image.getpalette()
+        ])
+        image = image.quantize()
+        logger.debug(f"image uses {max(image.getdata()) + 1} color(s)")
+
         if partial_palette:
             logger.debug(
                 f"prepending {len(partial_palette)} color(s) to palette"
@@ -1760,12 +1778,6 @@ winslowjosiah@gmail.com""",
                 list(it.chain(*partial_palette)) + image.getpalette()
             )
 
-        colors = max(image.getdata()) + 1
-        if colors >= 16:
-            logger.debug("image uses 16 colors; no need to truncate palette")
-        else:
-            logger.debug(f"truncating palette to {colors} color(s)")
-            image.putpalette(image.getpalette()[:colors * 3])
         logger.debug(
             f"palette: {list(it.batched(image.getpalette(), 3))!r}"
         )

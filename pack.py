@@ -260,6 +260,7 @@ def line_mask_to_packets(
 def image_to_packets(
         image: Image.Image,
         xy: tuple[int, int] = (0, 0),
+        background: Image.Image | None = None,
 ) -> dict[tuple[int, int], list[CDGPacket]]:
     """
     Convert an image to CDG packets.
@@ -286,6 +287,13 @@ def image_to_packets(
     palette_mode, palette_data = image.palette.getdata()
     assert palette_mode == "RGB"
     assert len(palette_data) // 3 <= 16
+
+    # Same things apply to the background image, if any
+    if background is not None:
+        assert background.mode == "P"
+        bg_palette_mode, bg_palette_data = background.palette.getdata()
+        assert bg_palette_mode == "RGB"
+        assert len(bg_palette_data) // 3 <= 16
 
     x, y = xy
 
@@ -318,7 +326,16 @@ def image_to_packets(
             image_x, image_y,
             image_x + CDG_TILE_WIDTH, image_y + CDG_TILE_HEIGHT,
         ))
-        packets[(row, column)] = tile_to_packets(tile, row, column)
+        background_tile = None
+        if background is not None:
+            background_tile = background.crop((
+                image_x, image_y,
+                image_x + CDG_TILE_WIDTH, image_y + CDG_TILE_HEIGHT,
+            ))
+        packets[(row, column)] = tile_to_packets(
+            tile, row, column,
+            background_tile=background_tile,
+        )
 
     return packets
 
@@ -330,6 +347,7 @@ def tile_to_packets(
         tile: Image.Image,
         row: int,
         column: int,
+        background_tile: Image.Image | None = None,
 ) -> list[CDGPacket]:
     """
     Convert a tile to CDG packets.
@@ -350,6 +368,14 @@ def tile_to_packets(
     list of CDGPacket
         CDG packets to draw this tile.
     """
+    # If the background tile has the same pixels as the tile we want to
+    # draw, don't draw this tile
+    if (
+        background_tile is not None
+        and list(tile.getdata()) == list(background_tile.getdata())
+    ):
+        return []
+
     # Sort colors in descending order by frequency
     colors: list[int] = list(map(
         operator.itemgetter(1),
@@ -357,9 +383,10 @@ def tile_to_packets(
     ))
 
     if len(colors) == 1:
-        # HACK If the only color is 0, we don't draw this tile. This is
-        # a quick and dirty way to not have to draw as many tiles.
-        if not colors[0]:
+        # HACK If the only color is 0 (and we're not drawing over a
+        # background tile), we don't draw this tile. This is not always
+        # desirable, but it's fine for our purposes.
+        if background_tile is None and not colors[0]:
             return []
         return [
             tile_block(
