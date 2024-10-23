@@ -1240,21 +1240,20 @@ class KaraokeComposer:
         # If there are too many tile boundaries for the number of column
         # updates
         else:
+            # Prepare the syllable text representation
+            syllable_text = ''.join(
+                f"{{{syll.text}}}" if si == syllable.syllable_index else syll.text
+                for si, syll in enumerate(lyric.lines[syllable.line_index].syllables)
+            )
+            
             # Warn the user
             logger.warning(
-                "not enough time to highlight lyric "
-                f"{syllable.lyric_index} line {syllable.line_index} "
-                f"syllable {syllable.syllable_index}\n"
-                f"ideal duration is {columns} column(s); actual "
-                f"duration is {len(highlight_progress) + 1} column(s)\n"
-                f"\t{''.join(
-                    f"{{{syll.text}}}"
-                    if si == syllable.syllable_index
-                    else syll.text
-                    for si, syll in enumerate(
-                        lyric.lines[syllable.line_index].syllables
-                    )
-                )}"
+                "Not enough time to highlight lyric %d line %d syllable %d. "
+                "Ideal duration is %d column(s); actual duration is %d column(s). "
+                "Syllable text: %s",
+                syllable.lyric_index, syllable.line_index, syllable.syllable_index,
+                columns, len(highlight_progress) + 1,
+                syllable_text
             )
 
         # Create the highlight packets
