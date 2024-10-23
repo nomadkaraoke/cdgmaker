@@ -1,10 +1,10 @@
 from collections import deque
-from importlib import resources as impresources
 from io import BytesIO
 import itertools as it
 import operator
 from pathlib import Path
 import re
+import sys
 import tomllib
 from typing import NamedTuple, Self, TYPE_CHECKING, cast
 from zipfile import ZipFile
@@ -16,7 +16,6 @@ from cattrs import Converter
 from PIL import Image, ImageFont
 from pydub import AudioSegment
 
-from . import fonts, images, transitions
 from .cdg import *
 from .config import *
 from .pack import *
@@ -27,6 +26,7 @@ from .utils import *
 import logging
 logger = logging.getLogger(__name__)
 
+package_dir = Path(__file__).parent
 
 def file_relative_to(
         filepath: "StrOrBytesPath | Path",
@@ -64,7 +64,10 @@ def file_relative_to(
         outpath = Path(rel) / filepath
         if outpath.is_file():
             return outpath
-    raise RuntimeError("File not found")
+
+    # Add more detailed error information
+    searched_paths = [str(Path(rel) / filepath) for rel in relative_to]
+    raise FileNotFoundError(f"File not found: {filepath}. Searched in: {', '.join(searched_paths)}")
 
 
 def sync_to_cdg(cs: int) -> int:
@@ -157,11 +160,19 @@ class KaraokeComposer:
         logger.debug("loading config settings")
 
         font_path = self.config.font
+        logger.debug(f"font_path: {font_path}")
         try:
-            font_path = file_relative_to(font_path, self.relative_dir)
-        except:
-            pass
-        self.font = ImageFont.truetype(font_path, self.config.font_size)
+            # First, try to find the font relative to the config file
+            font_path = Path(self.relative_dir) / font_path
+            if not font_path.is_file():
+                # If not found, try to find it in the package fonts directory
+                font_path = package_dir / "fonts" / Path(self.config.font).name
+            if not font_path.is_file():
+                raise FileNotFoundError(f"Font file not found: {self.config.font}")
+            self.font = ImageFont.truetype(str(font_path), self.config.font_size)
+        except Exception as e:
+            logger.error(f"Error loading font: {e}")
+            raise
 
         # Set color table for lyrics sections
         # NOTE At the moment, this only allows for up to 3 singers, with
@@ -1378,6 +1389,25 @@ class KaraokeComposer:
             ))
             y += instrumental.line_tile_height * CDG_TILE_HEIGHT
 
+        if instrumental.image is not None:
+            logger.debug("creating instrumental background image")
+            try:
+                # Load background image
+                background_image = self._load_image(
+                    instrumental.image,
+                    [
+                        instrumental.background or self.config.background,
+                        self.UNUSED_COLOR,
+                        instrumental.fill,
+                        instrumental.stroke or self.UNUSED_COLOR,
+                    ],
+                )
+            except FileNotFoundError as e:
+                logger.error(f"Failed to load instrumental image: {e}")
+                # Fallback to simple screen if image can't be loaded
+                instrumental.image = None
+                logger.warning("Falling back to simple screen for instrumental")
+
         if instrumental.image is None:
             logger.debug("no instrumental image; drawing simple screen")
             color_table = list(pad(
@@ -1396,18 +1426,6 @@ class KaraokeComposer:
                 *text_image_packets,
             ])
         else:
-            logger.debug("creating instrumental background image")
-            # Load background image
-            background_image = self._load_image(
-                instrumental.image,
-                [
-                    instrumental.background or self.config.background,
-                    self.UNUSED_COLOR,
-                    instrumental.fill,
-                    instrumental.stroke or self.UNUSED_COLOR,
-                ],
-            )
-
             # Queue palette packets
             palette = list(it.batched(background_image.getpalette(), 3))
             if len(palette) < 8:
@@ -1485,8 +1503,7 @@ class KaraokeComposer:
                     self.writer.queue_packets(coord_packets)
             else:
                 transition = Image.open(
-                    impresources.files(transitions)
-                    / f"{instrumental.transition}.png"
+                    package_dir / "transitions" / f"{instrumental.transition}.png"
                 )
                 for coord in self._gradient_to_tile_positions(transition):
                     self.writer.queue_packets(packets.get(coord, []))
@@ -1516,7 +1533,7 @@ class KaraokeComposer:
         logger.debug("loading intro background image")
         # Load background image
         background_image = self._load_image(
-            impresources.files(images) / "intro.png",
+            package_dir / "images" / "intro.png",
             [
                 (55, 154, 73),  # background
                 (55, 154, 73),  # border
@@ -1525,7 +1542,7 @@ class KaraokeComposer:
         )
 
         smallfont = ImageFont.truetype(
-            impresources.files(fonts) / "DMSans-VariableFont_opsz,wght.ttf",
+            package_dir / "fonts" / "DMSans-VariableFont_opsz,wght.ttf",
             16,
         )
         bigfont_size = 32
@@ -1536,7 +1553,7 @@ class KaraokeComposer:
             text_image = Image.new("P", (CDG_VISIBLE_WIDTH, MAX_HEIGHT * 2), 0)
             y = 0
             bigfont = ImageFont.truetype(
-                impresources.files(fonts) / "DMSerifDisplay-Regular.ttf",
+                package_dir / "fonts" / "DMSerifDisplay-Regular.ttf",
                 bigfont_size,
             )
 
@@ -1611,7 +1628,7 @@ class KaraokeComposer:
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            impresources.files(transitions) / "circlein.png"
+            package_dir / "transitions" / "circlein.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
@@ -1648,7 +1665,7 @@ class KaraokeComposer:
         logger.debug("loading outro background image")
         # Load background image
         background_image = self._load_image(
-            impresources.files(images) / "intro.png",
+            package_dir / "images" / "intro.png",
             [
                 (55, 154, 73),  # background
                 (55, 154, 73),  # border
@@ -1657,7 +1674,7 @@ class KaraokeComposer:
         )
 
         smallfont = ImageFont.truetype(
-            impresources.files(fonts) / "DMSans-VariableFont_opsz,wght.ttf",
+            package_dir / "fonts" / "DMSans-VariableFont_opsz,wght.ttf",
             18,
         )
         MAX_HEIGHT = 118
@@ -1718,7 +1735,7 @@ winslowjosiah@gmail.com""",
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            impresources.files(transitions) / "circlein.png"
+            package_dir / "transitions" / "circlein.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
@@ -1839,12 +1856,12 @@ winslowjosiah@gmail.com""",
     # !SECTION
     #endregion
 
-
-if __name__ == "__main__":
-    import sys
-
+def main():
     # TODO Make the logging level configurable from the command line
     logging.basicConfig(level=logging.DEBUG)
 
     kc = KaraokeComposer.from_file(sys.argv[1])
     kc.compose()
+
+if __name__ == "__main__":
+    main()

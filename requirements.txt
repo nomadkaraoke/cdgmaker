@@ -1,4 +1,0 @@
-attrs==24.2.0
-cattrs==24.1.2
-Pillow==10.4.0
-pydub==0.25.1

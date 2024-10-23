@@ -1,5 +1,8 @@
 # [Project-specific .gitignore stuff]
 examples
+src/cdgmaker/fonts/arial.ttf
+src/cdgmaker/fonts/georgia.ttf
+src/cdgmaker/fonts/verdana.ttf
 
 # N/A
 
