@@ -1630,10 +1630,11 @@ class KaraokeComposer:
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
 
-        DURATION = 2400
-        # XXX This is hardcoded.
-        DELAY = 0
-        end_time = DURATION
+        INTRO_DURATION = 5 * CDG_FPS  # 5 seconds * 300 frames per second = 1500 frames
+        FIRST_SYLLABLE_BUFFER = 3 * CDG_FPS  # 3 seconds * 300 frames per second = 900 frames
+
+        # Queue the intro screen for 5 seconds
+        end_time = INTRO_DURATION
         self.writer.queue_packets(
             [no_instruction()] * (end_time - self.writer.packets_queued)
         )
@@ -1644,13 +1645,17 @@ class KaraokeComposer:
             for line in lyric.lines
             for syllable in line.syllables
         )
-        self.intro_delay = max(
-            (DURATION + DELAY) - first_syllable_start_offset,
-            0,
-        )
-        logger.info(
-            f"should delay intro by {self.intro_delay} frame(s)"
-        )
+        logger.debug(f"first syllable starts at {first_syllable_start_offset}")
+
+        MINIMUM_FIRST_SYLLABLE_TIME_FOR_NO_SILENCE = INTRO_DURATION + FIRST_SYLLABLE_BUFFER
+        # If the first syllable is within 8 seconds, add 5 seconds of silence
+        # Otherwise, don't add any silence
+        if first_syllable_start_offset < MINIMUM_FIRST_SYLLABLE_TIME_FOR_NO_SILENCE:
+            self.intro_delay = MINIMUM_FIRST_SYLLABLE_TIME_FOR_NO_SILENCE
+            logger.info(f"First syllable within 8 seconds. Adding {self.intro_delay} frames of silence.")
+        else:
+            self.intro_delay = 0
+            logger.info("First syllable after 8 seconds. No additional silence needed.")
 
     def _compose_outro(self, end: int):
         # TODO Make it so the outro screen is not hardcoded

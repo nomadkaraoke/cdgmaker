@@ -75,9 +75,6 @@ def generate_toml(lrc_file, audio_file, title, artist, output_file, row, line_ti
     print(formatted_lyrics)
 
     sync_times = [lyric["timestamp"] for lyric in lyrics_data]
-    for lyric in lyrics_data:
-        logger.debug(f"Sync time: {lyric['timestamp']} for lyric: {lyric['text']}")
-
     toml_data = {
         "title": title,
         "artist": artist,
@@ -113,7 +110,6 @@ def generate_toml(lrc_file, audio_file, title, artist, output_file, row, line_ti
         toml.dump(toml_data, f)
 
     logger.info(f"TOML file generated: {output_file}")
-    logger.debug(f"Generated TOML data: {toml_data}")
 
 
 def get_font():
