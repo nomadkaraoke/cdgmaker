@@ -1539,7 +1539,8 @@ class KaraokeComposer:
             [
                 (17, 20, 39),  # background
                 (255, 170, 204),  # border
-                (255, 223, 107),   # text
+                self.config.title_color,   # title color
+                self.config.artist_color,  # artist color
             ],
         )
 
@@ -1563,7 +1564,7 @@ class KaraokeComposer:
                 font=bigfont,
             ):
                 text_image.paste(
-                    image.point(lambda v: v and 2, "P"),
+                    image.point(lambda v: v and 2, "P"),  # Use index 2 for title color
                     ((text_image.width - image.width) // 2, y),
                     mask=image.point(lambda v: v and 255, "1"),
                 )
@@ -1624,7 +1625,7 @@ class KaraokeComposer:
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            package_dir / "transitions" / "wiperightsimple.png"
+            package_dir / "transitions" / "cdgwipepatternnomad.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
@@ -1665,7 +1666,8 @@ class KaraokeComposer:
             [
                 (17, 20, 39),  # background
                 (255, 170, 204),  # border
-                (255, 223, 107),   # text
+                self.config.artist_color,  # "Thank you for singing" color
+                self.config.title_color,   # "nomadkaraoke.com" color
             ],
         )
 
@@ -1676,16 +1678,34 @@ class KaraokeComposer:
         logger.debug(f"rendering outro text")
         text_image = Image.new("P", (CDG_VISIBLE_WIDTH, MAX_HEIGHT * 2), 0)
         y = 0
+
+        # Render "Thank you for singing" text
         for image in render_lines(
             get_wrapped_text(
-                "THANK YOU FOR SINGING!\nnomadkaraoke.com",
+                "THANK YOU FOR SINGING!",
                 font=smallfont,
                 width=text_image.width,
             ).split("\n"),
             font=smallfont,
         ):
             text_image.paste(
-                image.point(lambda v: v and 2, "P"),
+                image.point(lambda v: v and 2, "P"),  # Use index 2 for artist color
+                ((text_image.width - image.width) // 2, y),
+                mask=image.point(lambda v: v and 255, "1"),
+            )
+            y += int(smallfont.size)
+
+        # Render "nomadkaraoke.com" text
+        for image in render_lines(
+            get_wrapped_text(
+                "nomadkaraoke.com",
+                font=smallfont,
+                width=text_image.width,
+            ).split("\n"),
+            font=smallfont,
+        ):
+            text_image.paste(
+                image.point(lambda v: v and 3, "P"),  # Use index 3 for title color
                 ((text_image.width - image.width) // 2, y),
                 mask=image.point(lambda v: v and 255, "1"),
             )
@@ -1697,7 +1717,7 @@ class KaraokeComposer:
 
         # Draw text onto image
         background_image.paste(
-            text_image.point(lambda v: v and 2, "P"),
+            text_image,
             (
                 (CDG_SCREEN_WIDTH - text_image.width) // 2,
                 (CDG_SCREEN_HEIGHT - text_image.height) // 2,
@@ -1725,7 +1745,7 @@ class KaraokeComposer:
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            package_dir / "transitions" / "wiperightsimple.png"
+            package_dir / "transitions" / "cdgwipepatternnomad.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
