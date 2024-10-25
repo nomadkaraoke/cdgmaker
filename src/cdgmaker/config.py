@@ -99,6 +99,7 @@ class Settings:
     artist: str
     file: Path
     font: Path
+    title_screen_background: Path
 
     outname: str = "output"
     clear_mode: LyricClearMode = LyricClearMode.LINE_DELAYED
@@ -116,6 +117,8 @@ class Settings:
     instrumentals: list[SettingsInstrumental] = field(factory=list)
     singers: list[SettingsSinger] = field(factory=list)
     lyrics: list[SettingsLyric] = field(factory=list)
+    title_color: RGBColor = field(converter=to_rgbcolor, default="#ffffff")
+    artist_color: RGBColor = field(converter=to_rgbcolor, default="#ffdf6b")
 
 
 __all__ = [

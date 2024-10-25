@@ -162,13 +162,15 @@ class KaraokeComposer:
         font_path = self.config.font
         logger.debug(f"font_path: {font_path}")
         try:
-            # First, try to find the font relative to the config file
-            font_path = Path(self.relative_dir) / font_path
-            if not font_path.is_file():
-                # If not found, try to find it in the package fonts directory
-                font_path = package_dir / "fonts" / Path(self.config.font).name
-            if not font_path.is_file():
-                raise FileNotFoundError(f"Font file not found: {self.config.font}")
+            # First, use the font path directly from the config
+            if not Path(font_path).is_file():
+                # Try to find the font relative to the config file
+                font_path = Path(self.relative_dir) / font_path
+                if not font_path.is_file():
+                    # If not found, try to find it in the package fonts directory
+                    font_path = package_dir / "fonts" / Path(self.config.font).name
+                if not font_path.is_file():
+                    raise FileNotFoundError(f"Font file not found: {self.config.font}")
             self.font = ImageFont.truetype(str(font_path), self.config.font_size)
         except Exception as e:
             logger.error(f"Error loading font: {e}")
@@ -1533,29 +1535,23 @@ class KaraokeComposer:
         logger.debug("loading intro background image")
         # Load background image
         background_image = self._load_image(
-            package_dir / "images" / "intro.png",
+            self.config.title_screen_background,
             [
-                (55, 154, 73),  # background
-                (55, 154, 73),  # border
-                (32, 32, 34),   # text
+                (17, 20, 39),  # background
+                (255, 170, 204),  # border
+                (255, 223, 107),   # text
             ],
         )
 
-        smallfont = ImageFont.truetype(
-            package_dir / "fonts" / "DMSans-VariableFont_opsz,wght.ttf",
-            16,
-        )
-        bigfont_size = 32
-        MAX_HEIGHT = 118
+        smallfont = ImageFont.truetype(self.config.font, 25)
+        bigfont_size = 30
+        MAX_HEIGHT = 200
         # Try rendering the title and artist to an image
         while True:
             logger.debug(f"trying song title at size {bigfont_size}")
             text_image = Image.new("P", (CDG_VISIBLE_WIDTH, MAX_HEIGHT * 2), 0)
             y = 0
-            bigfont = ImageFont.truetype(
-                package_dir / "fonts" / "DMSerifDisplay-Regular.ttf",
-                bigfont_size,
-            )
+            bigfont = ImageFont.truetype(self.config.font, bigfont_size)
 
             # Draw song title
             for image in render_lines(
@@ -1583,7 +1579,7 @@ class KaraokeComposer:
                 font=smallfont,
             ):
                 text_image.paste(
-                    image.point(lambda v: v and 2, "P"),
+                    image.point(lambda v: v and 3, "P"),  # Use index 3 for artist color
                     ((text_image.width - image.width) // 2, y),
                     mask=image.point(lambda v: v and 255, "1"),
                 )
@@ -1600,7 +1596,7 @@ class KaraokeComposer:
 
         # Draw text onto image
         background_image.paste(
-            text_image.point(lambda v: v and 2, "P"),
+            text_image,
             (
                 (CDG_SCREEN_WIDTH - text_image.width) // 2,
                 (CDG_SCREEN_HEIGHT - text_image.height) // 2,
@@ -1628,14 +1624,14 @@ class KaraokeComposer:
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            package_dir / "transitions" / "circlein.png"
+            package_dir / "transitions" / "wiperightsimple.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
 
         DURATION = 2400
         # XXX This is hardcoded.
-        DELAY = 900
+        DELAY = 0
         end_time = DURATION
         self.writer.queue_packets(
             [no_instruction()] * (end_time - self.writer.packets_queued)
@@ -1665,30 +1661,24 @@ class KaraokeComposer:
         logger.debug("loading outro background image")
         # Load background image
         background_image = self._load_image(
-            package_dir / "images" / "intro.png",
+            self.config.title_screen_background,
             [
-                (55, 154, 73),  # background
-                (55, 154, 73),  # border
-                (32, 32, 34),   # text
+                (17, 20, 39),  # background
+                (255, 170, 204),  # border
+                (255, 223, 107),   # text
             ],
         )
 
-        smallfont = ImageFont.truetype(
-            package_dir / "fonts" / "DMSans-VariableFont_opsz,wght.ttf",
-            18,
-        )
-        MAX_HEIGHT = 118
+        smallfont = ImageFont.truetype(self.config.font, 25)
+        MAX_HEIGHT = 200
+
         # Render text to an image
         logger.debug(f"rendering outro text")
         text_image = Image.new("P", (CDG_VISIBLE_WIDTH, MAX_HEIGHT * 2), 0)
         y = 0
         for image in render_lines(
             get_wrapped_text(
-                """
-winslowjosiah.com/karaoke
-
-For requests, send an email to
-winslowjosiah@gmail.com""",
+                "THANK YOU FOR SINGING!\nnomadkaraoke.com",
                 font=smallfont,
                 width=text_image.width,
             ).split("\n"),
@@ -1735,7 +1725,7 @@ winslowjosiah@gmail.com""",
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            package_dir / "transitions" / "circlein.png"
+            package_dir / "transitions" / "wiperightsimple.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
