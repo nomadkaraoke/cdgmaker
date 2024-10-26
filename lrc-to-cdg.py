@@ -21,7 +21,7 @@ ACTIVE_STROKE = "#1A3AEB"
 INACTIVE_FILL = "#ffaacc"
 INACTIVE_STROKE = "#880066"
 
-CDG_VISIBLE_WIDTH = 278  # Maximum width in pixels for CDG
+CDG_VISIBLE_WIDTH = 280
 TITLE_COLOR = "#ffffff"
 ARTIST_COLOR = "#ffdf6b"
 
@@ -39,6 +39,11 @@ DEFAULT_LINES_PER_PAGE = 4
 # Add new constants for instrumentals
 INSTRUMENTAL_GAP_THRESHOLD = 1500  # 15 seconds in centiseconds
 DEFAULT_INSTRUMENTAL_TEXT = "INSTRUMENTAL"
+
+# Add these constants near the top of the file, with the other constants
+INSTRUMENTAL_BACKGROUND = "/Users/andrew/cdg-instrumental-background-nomad-notes.png"
+INSTRUMENTAL_TRANSITION = "cdginstrumentalwipepatternnomad"
+INSTRUMENTAL_FONT_COLOR = "#ffdf6b"
 
 
 def parse_lrc(lrc_file):
@@ -72,16 +77,23 @@ def detect_instrumentals(lyrics_data):
         next_start = lyrics_data[i + 1]["timestamp"]
         gap = next_start - current_end
         if gap >= INSTRUMENTAL_GAP_THRESHOLD:
+            instrumental_start = current_end + 200  # Add 2 seconds (200 centiseconds) delay
+            instrumental_duration = (gap - 200) // 100  # Convert to seconds
             instrumentals.append({
-                "sync": current_end + 200,  # Add 2 seconds (200 centiseconds) delay
+                "sync": instrumental_start,
                 "wait": True,
-                "text": DEFAULT_INSTRUMENTAL_TEXT,
+                "text": f"{DEFAULT_INSTRUMENTAL_TEXT}\n{instrumental_duration} seconds\n",
                 "text_align": "center",
-                "text_placement": "middle",
+                "text_placement": "bottom middle",
                 "line_tile_height": DEFAULT_LINE_TILE_HEIGHT,
-                "fill": "#bbbbbb",
-                "stroke": "#555555",
+                "fill": INSTRUMENTAL_FONT_COLOR,
+                "stroke": "",
+                "image": INSTRUMENTAL_BACKGROUND,
+                "transition": INSTRUMENTAL_TRANSITION,
             })
+            logger.info(f"Detected instrumental: Gap of {gap} cs, starting at {instrumental_start} cs, duration {instrumental_duration} seconds")
+    
+    logger.info(f"Total instrumentals detected: {len(instrumentals)}")
     return instrumentals
 
 

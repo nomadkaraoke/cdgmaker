@@ -1295,9 +1295,10 @@ class KaraokeComposer:
 
         logger.debug("rendering instrumental text")
         text = instrumental.text.split("\n")
+        instrumental_font = ImageFont.truetype(self.config.font, 20)
         text_images = render_lines(
             text,
-            font=self.font,
+            font=instrumental_font,
             # NOTE If the instrumental shouldn't have a stroke, set the
             # stroke width to 0 instead.
             stroke_width=(
@@ -1625,7 +1626,7 @@ class KaraokeComposer:
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            package_dir / "transitions" / "cdgwipepatternnomad.png"
+            package_dir / "transitions" / "cdgtitlescreenwipepatternnomad.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
@@ -1750,7 +1751,7 @@ class KaraokeComposer:
 
         # Queue background image packets (and apply transition)
         transition = Image.open(
-            package_dir / "transitions" / "cdgwipepatternnomad.png"
+            package_dir / "transitions" / "cdgtitlescreenwipepatternnomad.png"
         )
         for coord in self._gradient_to_tile_positions(transition):
             self.writer.queue_packets(packets.get(coord, []))
