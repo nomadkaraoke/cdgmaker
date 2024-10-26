@@ -13,7 +13,7 @@ import itertools
 CLEAR_MODE = "eager"
 BACKGROUND_COLOR = "#111427"
 BORDER_COLOR = "#ff7acc"
-FONT_SIZE = 16
+FONT_SIZE = 18
 STROKE_WIDTH = 0
 STROKE_STYLE = "octagon"
 ACTIVE_FILL = "#7070F7"
@@ -61,7 +61,7 @@ def parse_lrc(lrc_file):
     for match in matches:
         minutes, seconds, milliseconds = map(int, match[:3])
         timestamp = (minutes * 60 + seconds) * 100 + int(milliseconds / 10)  # Convert to centiseconds
-        text = match[4].strip()
+        text = match[4].strip().upper()
         if text:  # Only add non-empty lyrics
             lyrics.append({"timestamp": timestamp, "text": text})
             # logger.debug(f"Parsed lyric: {timestamp} - {text}")
