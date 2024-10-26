@@ -146,7 +146,7 @@ class ComposerState:
 class KaraokeComposer:
     BACKGROUND = 0
     BORDER = 1
-    UNUSED_COLOR = (0, 0, 0)
+    UNUSED_COLOR = (255, 122, 204)
 
     #region Constructors
     # SECTION Constructors
