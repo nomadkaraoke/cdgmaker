@@ -7,6 +7,7 @@ from cdgmaker.composer import KaraokeComposer
 import sys
 from PIL import ImageFont, Image
 from cdgmaker.render import get_wrapped_text
+import itertools
 
 # Constants for TOML configuration
 CLEAR_MODE = "eager"
@@ -20,7 +21,7 @@ ACTIVE_STROKE = "#1A3AEB"
 INACTIVE_FILL = "#ffaacc"
 INACTIVE_STROKE = "#880066"
 
-CDG_VISIBLE_WIDTH = 288  # Maximum width in pixels for CDG
+CDG_VISIBLE_WIDTH = 278  # Maximum width in pixels for CDG
 TITLE_COLOR = "#ffffff"
 ARTIST_COLOR = "#ffdf6b"
 
@@ -34,6 +35,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_ROW = 4  # Increased from 1 to move text lower
 DEFAULT_LINE_TILE_HEIGHT = 3
 DEFAULT_LINES_PER_PAGE = 4
+
+# Add new constants for instrumentals
+INSTRUMENTAL_GAP_THRESHOLD = 1500  # 15 seconds in centiseconds
+DEFAULT_INSTRUMENTAL_TEXT = "INSTRUMENTAL"
 
 
 def parse_lrc(lrc_file):
@@ -54,10 +59,30 @@ def parse_lrc(lrc_file):
         text = match[4].strip()
         if text:  # Only add non-empty lyrics
             lyrics.append({"timestamp": timestamp, "text": text})
-            logger.debug(f"Parsed lyric: {timestamp} - {text}")
+            # logger.debug(f"Parsed lyric: {timestamp} - {text}")
 
     logger.info(f"Found {len(lyrics)} lyric lines")
     return lyrics
+
+
+def detect_instrumentals(lyrics_data):
+    instrumentals = []
+    for i in range(len(lyrics_data) - 1):
+        current_end = lyrics_data[i]["timestamp"]
+        next_start = lyrics_data[i + 1]["timestamp"]
+        gap = next_start - current_end
+        if gap >= INSTRUMENTAL_GAP_THRESHOLD:
+            instrumentals.append({
+                "sync": current_end + 200,  # Add 2 seconds (200 centiseconds) delay
+                "wait": True,
+                "text": DEFAULT_INSTRUMENTAL_TEXT,
+                "text_align": "center",
+                "text_placement": "middle",
+                "line_tile_height": DEFAULT_LINE_TILE_HEIGHT,
+                "fill": "#bbbbbb",
+                "stroke": "#555555",
+            })
+    return instrumentals
 
 
 def generate_toml(lrc_file, audio_file, title, artist, output_file, row, line_tile_height, lines_per_page, title_color, artist_color):
@@ -75,6 +100,8 @@ def generate_toml(lrc_file, audio_file, title, artist, output_file, row, line_ti
     print(formatted_lyrics)
 
     sync_times = [lyric["timestamp"] for lyric in lyrics_data]
+    instrumentals = detect_instrumentals(lyrics_data)
+
     toml_data = {
         "title": title,
         "artist": artist,
@@ -104,6 +131,7 @@ def generate_toml(lrc_file, audio_file, title, artist, output_file, row, line_ti
         "title_color": title_color,
         "artist_color": artist_color,
         "title_screen_background": TITLE_SCREEN_BACKGROUND,
+        "instrumentals": instrumentals,
     }
 
     with open(output_file, "w", encoding="utf-8") as f:
