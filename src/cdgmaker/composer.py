@@ -146,7 +146,7 @@ class ComposerState:
 class KaraokeComposer:
     BACKGROUND = 0
     BORDER = 1
-    UNUSED_COLOR = (255, 122, 204)
+    UNUSED_COLOR = (0, 0, 0)
 
     #region Constructors
     # SECTION Constructors
@@ -198,6 +198,7 @@ class KaraokeComposer:
         self.color_table = list(pad(
             self.color_table, 16, padvalue=self.UNUSED_COLOR,
         ))
+        logger.debug(f"Color table: {self.color_table}")
 
         self.max_tile_height = 0
         self.lyrics: list[LyricInfo] = []
@@ -781,6 +782,7 @@ class KaraokeComposer:
                 *memory_preset_repeat(self.BACKGROUND),
                 *load_color_table(self.color_table),
             ])
+            logger.debug(f"loaded color table in compose: {self.color_table}")
             if self.config.border is not None:
                 self.writer.queue_packet(border_preset(self.BORDER))
         else:
@@ -1148,6 +1150,7 @@ class KaraokeComposer:
                     *memory_preset_repeat(self.BACKGROUND),
                     *load_color_table(self.color_table),
                 ])
+                logger.debug(f"loaded color table in compose_lyrics: {self.color_table}")
                 if self.config.border is not None:
                     self.writer.queue_packet(border_preset(self.BORDER))
                 composer_state.just_cleared = True
@@ -1428,16 +1431,21 @@ class KaraokeComposer:
                 load_color_table_lo(color_table),
                 *text_image_packets,
             ])
+            logger.debug(f"loaded color table in compose_instrumental: {color_table}")
         else:
             # Queue palette packets
             palette = list(it.batched(background_image.getpalette(), 3))
             if len(palette) < 8:
+                color_table = list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
+                logger.debug(f"loaded color table in compose_instrumental: {color_table}")
                 self.writer.queue_packet(load_color_table_lo(
-                    list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
+                    color_table,
                 ))
             else:
+                color_table = list(pad(palette, 16, padvalue=self.UNUSED_COLOR))
+                logger.debug(f"loaded color table in compose_instrumental: {color_table}")
                 self.writer.queue_packets(load_color_table(
-                    list(pad(palette, 16, padvalue=self.UNUSED_COLOR))
+                    color_table,
                 ))
 
             logger.debug("drawing instrumental text")
@@ -1515,16 +1523,30 @@ class KaraokeComposer:
             logger.debug("this instrumental will last \"forever\"")
             return
 
-        # Wait until the next line should be drawn
+        # Wait until 3 seconds before the next line should be drawn
         current_time = (
             self.writer.packets_queued - self.sync_offset
             - self.intro_delay
         )
-        end_time = end - 16
-        logger.debug(f"waiting for {end_time - current_time} frame(s)")
+        preparation_time = 3 * CDG_FPS  # 3 seconds * 300 frames per second = 900 frames
+        end_time = max(current_time, end - preparation_time)
+        wait_time = end_time - current_time
+        
+        logger.debug(f"waiting for {wait_time} frame(s) before showing next lyrics")
         self.writer.queue_packets(
-            [no_instruction()] * (end_time - current_time)
+            [no_instruction()] * wait_time
         )
+
+        # Clear the screen for the next lyrics
+        self.writer.queue_packets([
+            *memory_preset_repeat(self.BACKGROUND),
+            *load_color_table(self.color_table),
+        ])
+        logger.debug(f"loaded color table in compose_instrumental: {self.color_table}")
+        if self.config.border is not None:
+            self.writer.queue_packet(border_preset(self.BORDER))
+
+        logger.debug("instrumental section ended")
 
     def _compose_intro(self):
         # TODO Make it so the intro screen is not hardcoded
@@ -1609,12 +1631,16 @@ class KaraokeComposer:
         # Queue palette packets
         palette = list(it.batched(background_image.getpalette(), 3))
         if len(palette) < 8:
+            color_table = list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
+            logger.debug(f"loaded color table in compose_intro: {color_table}")
             self.writer.queue_packet(load_color_table_lo(
-                list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
+                color_table,
             ))
         else:
+            color_table = list(pad(palette, 16, padvalue=self.UNUSED_COLOR))
+            logger.debug(f"loaded color table in compose_intro: {color_table}")
             self.writer.queue_packets(load_color_table(
-                list(pad(palette, 16, padvalue=self.UNUSED_COLOR))
+                color_table,
             ))
 
         # Render background image to packets

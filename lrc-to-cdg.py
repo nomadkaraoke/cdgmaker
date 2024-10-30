@@ -12,7 +12,7 @@ import itertools
 # Constants for TOML configuration
 CLEAR_MODE = "eager"
 BACKGROUND_COLOR = "#111427"
-BORDER_COLOR = "#ff7acc"
+BORDER_COLOR = "#111427"
 FONT_SIZE = 18
 STROKE_WIDTH = 0
 STROKE_STYLE = "octagon"
