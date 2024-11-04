@@ -33,9 +33,9 @@ T = TypeVar('T')
 def batched(iterable: Iterable[T], n: int) -> Iterable[tuple[T, ...]]:
     "Batch data into tuples of length n. The last batch may be shorter."
     # batched('ABCDEFG', 3) --> ABC DEF G
-    it = iter(iterable)
+    itobj = iter(iterable)
     while True:
-        batch = tuple(it.islice(n))
+        batch = tuple(it.islice(itobj, n))
         if not batch:
             return
         yield batch
