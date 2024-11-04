@@ -1,4 +1,5 @@
 # [Project-specific .gitignore stuff]
+tracks
 examples
 src/cdgmaker/fonts/arial.ttf
 src/cdgmaker/fonts/georgia.ttf

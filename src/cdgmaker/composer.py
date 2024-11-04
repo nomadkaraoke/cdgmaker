@@ -234,7 +234,7 @@ class KaraokeComposer:
                         )
                     ]
 
-                logger.debug(f"singer {singer}: {syllables}")
+                # logger.debug(f"singer {singer}: {syllables}")
                 lines.append(syllables)
                 line_singers.append(singer)
 
@@ -716,181 +716,185 @@ class KaraokeComposer:
     #region Compose words
     # SECTION Compose words
     def compose(self):
-        # NOTE Logistically, multiple simultaneous lyric sets doesn't
-        # make sense if the lyrics are being cleared by page.
-        if (
-            self.config.clear_mode == LyricClearMode.PAGE
-            and len(self.lyrics) > 1
-        ):
-            raise RuntimeError(
-                "page mode doesn't support more than one lyric set"
-            )
-
-        logger.debug("loading song file")
-        song: AudioSegment = AudioSegment.from_file(
-            file_relative_to(self.config.file, self.relative_dir)
-        )
-        logger.info("song file loaded")
-
-        self.intro_delay = 0
-        # Compose the intro
-        # NOTE This also sets the intro delay for later.
-        self._compose_intro()
-
-        lyric_states: list[LyricState] = []
-        for lyric in self.lyrics:
-            lyric_states.append(LyricState(
-                line_draw=0,
-                line_erase=0,
-                syllable_line=0,
-                syllable_index=0,
-                draw_queue=deque(),
-                highlight_queue=deque(),
-            ))
-
-        composer_state = ComposerState(
-            instrumental=0,
-            this_page=0,
-            last_page=0,
-            just_cleared=False,
-        )
-
-        # XXX If there is an instrumental section immediately after the
-        # intro, the screen should not be cleared. The way I'm detecting
-        # this, however, is by (mostly) copy-pasting the code that
-        # checks for instrumental sections. I shouldn't do it this way.
-        current_time = (
-            self.writer.packets_queued - self.sync_offset
-            - self.intro_delay
-        )
-        should_instrumental = False
-        instrumental = None
-        if composer_state.instrumental < len(self.config.instrumentals):
-            instrumental = self.config.instrumentals[
-                composer_state.instrumental
-            ]
-            instrumental_time = sync_to_cdg(instrumental.sync)
-            # NOTE Normally, this part has code to handle waiting for a
-            # lyric to finish. If there's an instrumental this early,
-            # however, there shouldn't be any lyrics to finish.
-            should_instrumental = current_time >= instrumental_time
-        # If there should not be an instrumental section now
-        if not should_instrumental:
-            logger.debug("instrumental intro is not present; clearing")
-            # Clear the screen
-            self.writer.queue_packets([
-                *memory_preset_repeat(self.BACKGROUND),
-                *load_color_table(self.color_table),
-            ])
-            logger.debug(f"loaded color table in compose: {self.color_table}")
-            if self.config.border is not None:
-                self.writer.queue_packet(border_preset(self.BORDER))
-        else:
-            logger.debug("instrumental intro is present; not clearing")
-
-        # While there are lines to draw/erase, or syllables to
-        # highlight, or events in the highlight/draw queues, or
-        # instrumental sections to process
-        while any(
-            state.line_draw < len(times.line_draw)
-            or state.line_erase < len(times.line_erase)
-            or state.syllable_line < len(lyric.lines)
-            or state.draw_queue
-            or state.highlight_queue
-            for lyric, times, state in zip(
-                self.lyrics,
-                self.lyric_times,
-                lyric_states,
-            )
-        ) or (
-            composer_state.instrumental < len(self.config.instrumentals)
-        ):
-            for lyric, times, state in zip(
-                self.lyrics,
-                self.lyric_times,
-                lyric_states,
+        try:
+            # NOTE Logistically, multiple simultaneous lyric sets doesn't
+            # make sense if the lyrics are being cleared by page.
+            if (
+                self.config.clear_mode == LyricClearMode.PAGE
+                and len(self.lyrics) > 1
             ):
-                self._compose_lyric(
-                    lyric=lyric,
-                    times=times,
-                    state=state,
-                    lyric_states=lyric_states,
-                    composer_state=composer_state,
+                raise RuntimeError(
+                    "page mode doesn't support more than one lyric set"
                 )
 
-        # Add audio padding to intro
-        logger.debug("padding intro of audio file")
-        intro_silence: AudioSegment = AudioSegment.silent(
-            self.intro_delay * 1000 // CDG_FPS,
-            frame_rate=song.frame_rate,
-        )
-        padded_song = intro_silence + song
-
-        # NOTE If video padding is not added to the end of the song, the
-        # outro (or next instrumental section) begins immediately after
-        # the end of the last syllable, which would be abrupt.
-        if self.config.clear_mode == LyricClearMode.PAGE:
-            logger.debug(
-                "clear mode is page; adding padding before outro"
+            logger.debug("loading song file")
+            song: AudioSegment = AudioSegment.from_file(
+                file_relative_to(self.config.file, self.relative_dir)
             )
-            self.writer.queue_packets([no_instruction()] * 3 * CDG_FPS)
+            logger.info("song file loaded")
 
-        # Calculate video padding before outro
-        OUTRO_DURATION = 2400
-        # This karaoke file ends at the later of:
-        # - The end of the audio (with the padded intro)
-        # - 8 seconds after the current video time
-        end = max(
-            int(padded_song.duration_seconds * CDG_FPS),
-            self.writer.packets_queued + OUTRO_DURATION,
-        )
-        logger.debug(f"song should be {end} frame(s) long")
-        padding_before_outro = (
-            (end - OUTRO_DURATION) - self.writer.packets_queued
-        )
-        logger.debug(
-            f"queueing {padding_before_outro} packets before outro"
-        )
-        self.writer.queue_packets([no_instruction()] * padding_before_outro)
+            self.intro_delay = 0
+            # Compose the intro
+            # NOTE This also sets the intro delay for later.
+            self._compose_intro()
 
-        # Compose the outro (and thus, finish the video)
-        self._compose_outro(end)
-        logger.info("karaoke file composed")
+            lyric_states: list[LyricState] = []
+            for lyric in self.lyrics:
+                lyric_states.append(LyricState(
+                    line_draw=0,
+                    line_erase=0,
+                    syllable_line=0,
+                    syllable_index=0,
+                    draw_queue=deque(),
+                    highlight_queue=deque(),
+                ))
 
-        # Add audio padding to outro (and thus, finish the audio)
-        logger.debug("padding outro of audio file")
-        outro_silence: AudioSegment = AudioSegment.silent(
-            (
-                (self.writer.packets_queued * 1000 // CDG_FPS)
-                - int(padded_song.duration_seconds * 1000)
-            ),
-            frame_rate=song.frame_rate,
-        )
-        padded_song += outro_silence
-
-        # Write CDG and MP3 data to ZIP file
-        outname = self.config.outname
-        zipfile_name = self.relative_dir / Path(f"{outname}.zip")
-        logger.debug(f"creating {zipfile_name}")
-        with ZipFile(zipfile_name, "w") as zipfile:
-            cdg_bytes = BytesIO()
-            logger.debug("writing cdg packets to stream")
-            self.writer.write_packets(cdg_bytes)
-            logger.debug(
-                f"writing stream to zipfile as {outname}.cdg"
+            composer_state = ComposerState(
+                instrumental=0,
+                this_page=0,
+                last_page=0,
+                just_cleared=False,
             )
-            cdg_bytes.seek(0)
-            zipfile.writestr(f"{outname}.cdg", cdg_bytes.read())
 
-            mp3_bytes = BytesIO()
-            logger.debug("writing mp3 data to stream")
-            padded_song.export(mp3_bytes, format="mp3")
-            logger.debug(
-                f"writing stream to zipfile as {outname}.mp3"
+            # XXX If there is an instrumental section immediately after the
+            # intro, the screen should not be cleared. The way I'm detecting
+            # this, however, is by (mostly) copy-pasting the code that
+            # checks for instrumental sections. I shouldn't do it this way.
+            current_time = (
+                self.writer.packets_queued - self.sync_offset
+                - self.intro_delay
             )
-            mp3_bytes.seek(0)
-            zipfile.writestr(f"{outname}.mp3", mp3_bytes.read())
-        logger.info(f"karaoke files written to {zipfile_name}")
+            should_instrumental = False
+            instrumental = None
+            if composer_state.instrumental < len(self.config.instrumentals):
+                instrumental = self.config.instrumentals[
+                    composer_state.instrumental
+                ]
+                instrumental_time = sync_to_cdg(instrumental.sync)
+                # NOTE Normally, this part has code to handle waiting for a
+                # lyric to finish. If there's an instrumental this early,
+                # however, there shouldn't be any lyrics to finish.
+                should_instrumental = current_time >= instrumental_time
+            # If there should not be an instrumental section now
+            if not should_instrumental:
+                logger.debug("instrumental intro is not present; clearing")
+                # Clear the screen
+                self.writer.queue_packets([
+                    *memory_preset_repeat(self.BACKGROUND),
+                    *load_color_table(self.color_table),
+                ])
+                logger.debug(f"loaded color table in compose: {self.color_table}")
+                if self.config.border is not None:
+                    self.writer.queue_packet(border_preset(self.BORDER))
+            else:
+                logger.debug("instrumental intro is present; not clearing")
+
+            # While there are lines to draw/erase, or syllables to
+            # highlight, or events in the highlight/draw queues, or
+            # instrumental sections to process
+            while any(
+                state.line_draw < len(times.line_draw)
+                or state.line_erase < len(times.line_erase)
+                or state.syllable_line < len(lyric.lines)
+                or state.draw_queue
+                or state.highlight_queue
+                for lyric, times, state in zip(
+                    self.lyrics,
+                    self.lyric_times,
+                    lyric_states,
+                )
+            ) or (
+                composer_state.instrumental < len(self.config.instrumentals)
+            ):
+                for lyric, times, state in zip(
+                    self.lyrics,
+                    self.lyric_times,
+                    lyric_states,
+                ):
+                    self._compose_lyric(
+                        lyric=lyric,
+                        times=times,
+                        state=state,
+                        lyric_states=lyric_states,
+                        composer_state=composer_state,
+                    )
+
+            # Add audio padding to intro
+            logger.debug("padding intro of audio file")
+            intro_silence: AudioSegment = AudioSegment.silent(
+                self.intro_delay * 1000 // CDG_FPS,
+                frame_rate=song.frame_rate,
+            )
+            padded_song = intro_silence + song
+
+            # NOTE If video padding is not added to the end of the song, the
+            # outro (or next instrumental section) begins immediately after
+            # the end of the last syllable, which would be abrupt.
+            if self.config.clear_mode == LyricClearMode.PAGE:
+                logger.debug(
+                    "clear mode is page; adding padding before outro"
+                )
+                self.writer.queue_packets([no_instruction()] * 3 * CDG_FPS)
+
+            # Calculate video padding before outro
+            OUTRO_DURATION = 2400
+            # This karaoke file ends at the later of:
+            # - The end of the audio (with the padded intro)
+            # - 8 seconds after the current video time
+            end = max(
+                int(padded_song.duration_seconds * CDG_FPS),
+                self.writer.packets_queued + OUTRO_DURATION,
+            )
+            logger.debug(f"song should be {end} frame(s) long")
+            padding_before_outro = (
+                (end - OUTRO_DURATION) - self.writer.packets_queued
+            )
+            logger.debug(
+                f"queueing {padding_before_outro} packets before outro"
+            )
+            self.writer.queue_packets([no_instruction()] * padding_before_outro)
+
+            # Compose the outro (and thus, finish the video)
+            self._compose_outro(end)
+            logger.info("karaoke file composed")
+
+            # Add audio padding to outro (and thus, finish the audio)
+            logger.debug("padding outro of audio file")
+            outro_silence: AudioSegment = AudioSegment.silent(
+                (
+                    (self.writer.packets_queued * 1000 // CDG_FPS)
+                    - int(padded_song.duration_seconds * 1000)
+                ),
+                frame_rate=song.frame_rate,
+            )
+            padded_song += outro_silence
+
+            # Write CDG and MP3 data to ZIP file
+            outname = self.config.outname
+            zipfile_name = self.relative_dir / Path(f"{outname}.zip")
+            logger.debug(f"creating {zipfile_name}")
+            with ZipFile(zipfile_name, "w") as zipfile:
+                cdg_bytes = BytesIO()
+                logger.debug("writing cdg packets to stream")
+                self.writer.write_packets(cdg_bytes)
+                logger.debug(
+                    f"writing stream to zipfile as {outname}.cdg"
+                )
+                cdg_bytes.seek(0)
+                zipfile.writestr(f"{outname}.cdg", cdg_bytes.read())
+
+                mp3_bytes = BytesIO()
+                logger.debug("writing mp3 data to stream")
+                padded_song.export(mp3_bytes, format="mp3")
+                logger.debug(
+                    f"writing stream to zipfile as {outname}.mp3"
+                )
+                mp3_bytes.seek(0)
+                zipfile.writestr(f"{outname}.mp3", mp3_bytes.read())
+            logger.info(f"karaoke files written to {zipfile_name}")
+        except Exception as e:
+            logger.error(f"Error in compose: {str(e)}", exc_info=True)
+            raise
 
     def _compose_lyric(
             self,
@@ -1029,11 +1033,7 @@ class KaraokeComposer:
             instrumental = self.config.instrumentals[
                 composer_state.instrumental
             ]
-            # TODO Improve this code for waiting to start instrumentals!
-            # It's a mess!
             instrumental_time = sync_to_cdg(instrumental.sync)
-            # If instrumental time is to be interpreted as waiting for
-            # syllable to end
             if instrumental.wait:
                 syllable_iter = iter(
                     syll
@@ -1071,52 +1071,37 @@ class KaraokeComposer:
                         )
                         instrumental.wait = False
             should_instrumental = current_time >= instrumental_time
+
         # If there should be an instrumental section now
         if should_instrumental:
             assert instrumental is not None
-            logger.debug("time for an instrumental section")
+            logger.info("_compose_lyric: Time for an instrumental section")
             if instrumental.wait:
-                logger.debug(
-                    "this instrumental section waited for the previous "
-                    "line to finish"
-                )
+                logger.info("_compose_lyric: This instrumental section waited for the previous line to finish")
             else:
-                logger.debug(
-                    "this instrumental did not wait for the previous "
-                    "line to finish"
-                )
+                logger.info("_compose_lyric: This instrumental did not wait for the previous line to finish")
 
-            logger.debug("purging all highlight/draw queues")
+            logger.debug("_compose_lyric: Purging all highlight/draw queues")
             for st in lyric_states:
-                # If instrumental has waited for this syllable to end
                 if instrumental.wait:
-                    # There shouldn't be anything in the highlight queue
-                    assert not st.highlight_queue
-                    # If there's anything left in the draw queue
+                    if st.highlight_queue:
+                        logger.warning("_compose_lyric: Unexpected items in highlight queue when instrumental waited")
                     if st.draw_queue:
-                        # NOTE If the current lyric state has anything
-                        # left in the draw queue, it should be the
-                        # erasing of the current line.
                         if st == state:
-                            assert should_erase_this_line
-                        # Queue everything left in the draw queue
-                        # immediately
+                            logger.debug("_compose_lyric: Queueing remaining draw packets for current state")
+                        else:
+                            logger.warning("_compose_lyric: Unexpected items in draw queue for non-current state")
                         self.writer.queue_packets(st.draw_queue)
 
-                # Purge highlight/draw queues
                 st.highlight_queue.clear()
                 st.draw_queue.clear()
 
-            # The instrumental should end when the next line is drawn by
-            # default
+            logger.debug("_compose_lyric: Determining instrumental end time")
             if line_draw_time is not None:
                 instrumental_end = line_draw_time
             else:
-                # NOTE A value of None here means this instrumental will
-                # never end (and once the screen is drawn, it will not
-                # pause), unless there is another instrumental after
-                # this.
                 instrumental_end = None
+            logger.debug(f"_compose_lyric: instrumental_end={instrumental_end}")
 
             composer_state.instrumental += 1
             next_instrumental = None
@@ -1124,40 +1109,37 @@ class KaraokeComposer:
                 next_instrumental = self.config.instrumentals[
                     composer_state.instrumental
                 ]
+
             should_clear = True
-            # If there is a next instrumental
             if next_instrumental is not None:
                 next_instrumental_time = sync_to_cdg(next_instrumental.sync)
-                # If the next instrumental is immediately after this one
-                if (
-                    instrumental_end is None
-                    or next_instrumental_time <= instrumental_end
-                ):
-                    # This instrumental should end there
+                logger.debug(f"_compose_lyric: next_instrumental_time={next_instrumental_time}")
+                if instrumental_end is None or next_instrumental_time <= instrumental_end:
                     instrumental_end = next_instrumental_time
-                    # Don't clear the screen afterwards
                     should_clear = False
             else:
                 if line_draw_time is None:
                     should_clear = False
 
-            # Compose the instrumental section
-            self._compose_instrumental(instrumental, instrumental_end)
+            logger.info(f"_compose_lyric: Composing instrumental. End time: {instrumental_end}, Should clear: {should_clear}")
+            try:
+                self._compose_instrumental(instrumental, instrumental_end)
+            except Exception as e:
+                logger.error(f"Error in _compose_instrumental: {str(e)}", exc_info=True)
+                raise
+
             if should_clear:
-                logger.debug("clearing screen after instrumental")
-                # Clear the screen for the next karaoke lines
+                logger.debug("_compose_lyric: Clearing screen after instrumental")
                 self.writer.queue_packets([
                     *memory_preset_repeat(self.BACKGROUND),
                     *load_color_table(self.color_table),
                 ])
-                logger.debug(f"loaded color table in compose_lyrics: {self.color_table}")
+                logger.debug(f"_compose_lyric: Loaded color table: {self.color_table}")
                 if self.config.border is not None:
                     self.writer.queue_packet(border_preset(self.BORDER))
                 composer_state.just_cleared = True
             else:
-                logger.debug("not clearing screen after instrumental")
-            # Advance to the next instrumental section
-            instrumental = next_instrumental
+                logger.debug("_compose_lyric: Not clearing screen after instrumental")
             return
 
         composer_state.just_cleared = False
@@ -1289,264 +1271,268 @@ class KaraokeComposer:
             instrumental: SettingsInstrumental,
             end: int | None,
     ):
-        logger.info("composing instrumental section")
-        self.writer.queue_packets([
-            *memory_preset_repeat(0),
-            # TODO Add option for borders in instrumentals
-            border_preset(0),
-        ])
+        logger.info(f"Composing instrumental section. End time: {end}")
+        try:
+            self.writer.queue_packets([
+                *memory_preset_repeat(0),
+                # TODO Add option for borders in instrumentals
+                border_preset(0),
+            ])
 
-        logger.debug("rendering instrumental text")
-        text = instrumental.text.split("\n")
-        instrumental_font = ImageFont.truetype(self.config.font, 20)
-        text_images = render_lines(
-            text,
-            font=instrumental_font,
-            # NOTE If the instrumental shouldn't have a stroke, set the
-            # stroke width to 0 instead.
-            stroke_width=(
-                self.config.stroke_width
-                if instrumental.stroke is not None
-                else 0
-            ),
-            stroke_type=self.config.stroke_type,
-        )
-        text_width = max(image.width for image in text_images)
-        line_height = instrumental.line_tile_height * CDG_TILE_HEIGHT
-        text_height = line_height * len(text)
-        max_height = max(image.height for image in text_images)
-
-        # Set X position of "text box"
-        match instrumental.text_placement:
-            case (
-                TextPlacement.TOP_LEFT
-                | TextPlacement.MIDDLE_LEFT
-                | TextPlacement.BOTTOM_LEFT
-            ):
-                text_x = CDG_TILE_WIDTH * 2
-            case (
-                TextPlacement.TOP_MIDDLE
-                | TextPlacement.MIDDLE
-                | TextPlacement.BOTTOM_MIDDLE
-            ):
-                text_x = (CDG_SCREEN_WIDTH - text_width) // 2
-            case (
-                TextPlacement.TOP_RIGHT
-                | TextPlacement.MIDDLE_RIGHT
-                | TextPlacement.BOTTOM_RIGHT
-            ):
-                text_x = CDG_SCREEN_WIDTH - CDG_TILE_WIDTH * 2 - text_width
-        # Set Y position of "text box"
-        match instrumental.text_placement:
-            case (
-                TextPlacement.TOP_LEFT
-                | TextPlacement.TOP_MIDDLE
-                | TextPlacement.TOP_RIGHT
-            ):
-                text_y = CDG_TILE_HEIGHT * 2
-            case (
-                TextPlacement.MIDDLE_LEFT
-                | TextPlacement.MIDDLE
-                | TextPlacement.MIDDLE_RIGHT
-            ):
-                text_y = (
-                    (CDG_SCREEN_HEIGHT - text_height) // 2
-                ) // CDG_TILE_HEIGHT * CDG_TILE_HEIGHT
-                # Add offset to place text closer to middle of line
-                text_y += (line_height - max_height) // 2
-            case (
-                TextPlacement.BOTTOM_LEFT
-                | TextPlacement.BOTTOM_MIDDLE
-                | TextPlacement.BOTTOM_RIGHT
-            ):
-                text_y = CDG_SCREEN_HEIGHT - CDG_TILE_HEIGHT * 2 - text_height
-                # Add offset to place text closer to bottom of line
-                text_y += line_height - max_height
-
-        # Create "screen" image for drawing text
-        screen = Image.new("P", (CDG_SCREEN_WIDTH, CDG_SCREEN_HEIGHT), 0)
-        # Create list of packets to draw text
-        text_image_packets: list[CDGPacket] = []
-        y = text_y
-        for image in text_images:
-            # Set alignment of text
-            match instrumental.text_align:
-                case TextAlign.LEFT:
-                    x = text_x
-                case TextAlign.CENTER:
-                    x = text_x + (text_width - image.width) // 2
-                case TextAlign.RIGHT:
-                    x = text_x + text_width - image.width
-            # Draw text onto simulated screen
-            screen.paste(
-                image.point(
-                    lambda v: v and (2 if v == RENDERED_FILL else 3),
-                    "P",
+            logger.debug("Rendering instrumental text")
+            text = instrumental.text.split("\n")
+            instrumental_font = ImageFont.truetype(self.config.font, 20)
+            text_images = render_lines(
+                text,
+                font=instrumental_font,
+                # NOTE If the instrumental shouldn't have a stroke, set the
+                # stroke width to 0 instead.
+                stroke_width=(
+                    self.config.stroke_width
+                    if instrumental.stroke is not None
+                    else 0
                 ),
-                (x, y),
+                stroke_type=self.config.stroke_type,
             )
-            # Render text into packets
-            text_image_packets.extend(line_image_to_packets(
-                image,
-                xy=(x, y),
-                fill=2,
-                stroke=3,
-                background=self.BACKGROUND,
-            ))
-            y += instrumental.line_tile_height * CDG_TILE_HEIGHT
+            text_width = max(image.width for image in text_images)
+            line_height = instrumental.line_tile_height * CDG_TILE_HEIGHT
+            text_height = line_height * len(text)
+            max_height = max(image.height for image in text_images)
 
-        if instrumental.image is not None:
-            logger.debug("creating instrumental background image")
-            try:
-                # Load background image
-                background_image = self._load_image(
-                    instrumental.image,
+            # Set X position of "text box"
+            match instrumental.text_placement:
+                case (
+                    TextPlacement.TOP_LEFT
+                    | TextPlacement.MIDDLE_LEFT
+                    | TextPlacement.BOTTOM_LEFT
+                ):
+                    text_x = CDG_TILE_WIDTH * 2
+                case (
+                    TextPlacement.TOP_MIDDLE
+                    | TextPlacement.MIDDLE
+                    | TextPlacement.BOTTOM_MIDDLE
+                ):
+                    text_x = (CDG_SCREEN_WIDTH - text_width) // 2
+                case (
+                    TextPlacement.TOP_RIGHT
+                    | TextPlacement.MIDDLE_RIGHT
+                    | TextPlacement.BOTTOM_RIGHT
+                ):
+                    text_x = CDG_SCREEN_WIDTH - CDG_TILE_WIDTH * 2 - text_width
+            # Set Y position of "text box"
+            match instrumental.text_placement:
+                case (
+                    TextPlacement.TOP_LEFT
+                    | TextPlacement.TOP_MIDDLE
+                    | TextPlacement.TOP_RIGHT
+                ):
+                    text_y = CDG_TILE_HEIGHT * 2
+                case (
+                    TextPlacement.MIDDLE_LEFT
+                    | TextPlacement.MIDDLE
+                    | TextPlacement.MIDDLE_RIGHT
+                ):
+                    text_y = (
+                        (CDG_SCREEN_HEIGHT - text_height) // 2
+                    ) // CDG_TILE_HEIGHT * CDG_TILE_HEIGHT
+                    # Add offset to place text closer to middle of line
+                    text_y += (line_height - max_height) // 2
+                case (
+                    TextPlacement.BOTTOM_LEFT
+                    | TextPlacement.BOTTOM_MIDDLE
+                    | TextPlacement.BOTTOM_RIGHT
+                ):
+                    text_y = CDG_SCREEN_HEIGHT - CDG_TILE_HEIGHT * 2 - text_height
+                    # Add offset to place text closer to bottom of line
+                    text_y += line_height - max_height
+
+            # Create "screen" image for drawing text
+            screen = Image.new("P", (CDG_SCREEN_WIDTH, CDG_SCREEN_HEIGHT), 0)
+            # Create list of packets to draw text
+            text_image_packets: list[CDGPacket] = []
+            y = text_y
+            for image in text_images:
+                # Set alignment of text
+                match instrumental.text_align:
+                    case TextAlign.LEFT:
+                        x = text_x
+                    case TextAlign.CENTER:
+                        x = text_x + (text_width - image.width) // 2
+                    case TextAlign.RIGHT:
+                        x = text_x + text_width - image.width
+                # Draw text onto simulated screen
+                screen.paste(
+                    image.point(
+                        lambda v: v and (2 if v == RENDERED_FILL else 3),
+                        "P",
+                    ),
+                    (x, y),
+                )
+                # Render text into packets
+                text_image_packets.extend(line_image_to_packets(
+                    image,
+                    xy=(x, y),
+                    fill=2,
+                    stroke=3,
+                    background=self.BACKGROUND,
+                ))
+                y += instrumental.line_tile_height * CDG_TILE_HEIGHT
+
+            if instrumental.image is not None:
+                logger.debug("creating instrumental background image")
+                try:
+                    # Load background image
+                    background_image = self._load_image(
+                        instrumental.image,
+                        [
+                            instrumental.background or self.config.background,
+                            self.UNUSED_COLOR,
+                            instrumental.fill,
+                            instrumental.stroke or self.UNUSED_COLOR,
+                        ],
+                    )
+                except FileNotFoundError as e:
+                    logger.error(f"Failed to load instrumental image: {e}")
+                    # Fallback to simple screen if image can't be loaded
+                    instrumental.image = None
+                    logger.warning("Falling back to simple screen for instrumental")
+
+            if instrumental.image is None:
+                logger.debug("no instrumental image; drawing simple screen")
+                color_table = list(pad(
                     [
                         instrumental.background or self.config.background,
                         self.UNUSED_COLOR,
                         instrumental.fill,
                         instrumental.stroke or self.UNUSED_COLOR,
                     ],
-                )
-            except FileNotFoundError as e:
-                logger.error(f"Failed to load instrumental image: {e}")
-                # Fallback to simple screen if image can't be loaded
-                instrumental.image = None
-                logger.warning("Falling back to simple screen for instrumental")
+                    8,
+                    padvalue=self.UNUSED_COLOR,
+                ))
+                # Set palette and draw text to screen
+                self.writer.queue_packets([
+                    load_color_table_lo(color_table),
+                    *text_image_packets,
+                ])
+                logger.debug(f"loaded color table in compose_instrumental: {color_table}")
+            else:
+                # Queue palette packets
+                palette = list(it.batched(background_image.getpalette(), 3))
+                if len(palette) < 8:
+                    color_table = list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
+                    logger.debug(f"loaded color table in compose_instrumental: {color_table}")
+                    self.writer.queue_packet(load_color_table_lo(
+                        color_table,
+                    ))
+                else:
+                    color_table = list(pad(palette, 16, padvalue=self.UNUSED_COLOR))
+                    logger.debug(f"loaded color table in compose_instrumental: {color_table}")
+                    self.writer.queue_packets(load_color_table(
+                        color_table,
+                    ))
 
-        if instrumental.image is None:
-            logger.debug("no instrumental image; drawing simple screen")
-            color_table = list(pad(
-                [
-                    instrumental.background or self.config.background,
-                    self.UNUSED_COLOR,
-                    instrumental.fill,
-                    instrumental.stroke or self.UNUSED_COLOR,
-                ],
-                8,
-                padvalue=self.UNUSED_COLOR,
-            ))
-            # Set palette and draw text to screen
+                logger.debug("drawing instrumental text")
+                # Queue text packets
+                self.writer.queue_packets(text_image_packets)
+
+                logger.debug(
+                    "rendering instrumental text over background image"
+                )
+                # HACK To properly draw and layer everything, I need to
+                # create a version of the background image that has the text
+                # overlaid onto it, and is tile-aligned. This requires some
+                # juggling.
+                padleft = instrumental.x % CDG_TILE_WIDTH
+                padright = -(
+                    instrumental.x + background_image.width
+                ) % CDG_TILE_WIDTH
+                padtop = instrumental.y % CDG_TILE_HEIGHT
+                padbottom = -(
+                    instrumental.y + background_image.height
+                ) % CDG_TILE_HEIGHT
+                logger.debug(
+                    f"padding L={padleft} R={padright} T={padtop} B={padbottom}"
+                )
+                # Create axis-aligned background image with proper size and
+                # palette
+                aligned_background_image = Image.new(
+                    "P",
+                    (
+                        background_image.width + padleft + padright,
+                        background_image.height + padtop + padbottom,
+                    ),
+                    0,
+                )
+                aligned_background_image.putpalette(background_image.getpalette())
+                # Paste background image onto axis-aligned image
+                aligned_background_image.paste(background_image, (padleft, padtop))
+                # Paste existing screen text onto axis-aligned image
+                aligned_background_image.paste(
+                    screen,
+                    (padleft - instrumental.x, padtop - instrumental.y),
+                    # NOTE This masks out the 0 pixels.
+                    mask=screen.point(lambda v: v and 255, mode="1"),
+                )
+
+                # Render background image to packets
+                packets = image_to_packets(
+                    aligned_background_image,
+                    (instrumental.x - padleft, instrumental.y - padtop),
+                    background=screen.crop((
+                        instrumental.x - padleft,
+                        instrumental.y - padtop,
+                        instrumental.x - padleft + aligned_background_image.width,
+                        instrumental.y - padtop + aligned_background_image.height,
+                    )),
+                )
+                logger.debug(
+                    "instrumental background image packed in "
+                    f"{len(list(it.chain(*packets.values())))} packet(s)"
+                )
+
+                logger.debug("applying instrumental transition")
+                # Queue background image packets (and apply transition)
+                if instrumental.transition is None:
+                    for coord_packets in packets.values():
+                        self.writer.queue_packets(coord_packets)
+                else:
+                    transition = Image.open(
+                        package_dir / "transitions" / f"{instrumental.transition}.png"
+                    )
+                    for coord in self._gradient_to_tile_positions(transition):
+                        self.writer.queue_packets(packets.get(coord, []))
+
+            if end is None:
+                logger.debug("this instrumental will last \"forever\"")
+                return
+
+            # Wait until 3 seconds before the next line should be drawn
+            current_time = (
+                self.writer.packets_queued - self.sync_offset
+                - self.intro_delay
+            )
+            preparation_time = 3 * CDG_FPS  # 3 seconds * 300 frames per second = 900 frames
+            end_time = max(current_time, end - preparation_time)
+            wait_time = end_time - current_time
+            
+            logger.debug(f"waiting for {wait_time} frame(s) before showing next lyrics")
+            self.writer.queue_packets(
+                [no_instruction()] * wait_time
+            )
+
+            # Clear the screen for the next lyrics
             self.writer.queue_packets([
-                load_color_table_lo(color_table),
-                *text_image_packets,
+                *memory_preset_repeat(self.BACKGROUND),
+                *load_color_table(self.color_table),
             ])
-            logger.debug(f"loaded color table in compose_instrumental: {color_table}")
-        else:
-            # Queue palette packets
-            palette = list(it.batched(background_image.getpalette(), 3))
-            if len(palette) < 8:
-                color_table = list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
-                logger.debug(f"loaded color table in compose_instrumental: {color_table}")
-                self.writer.queue_packet(load_color_table_lo(
-                    color_table,
-                ))
-            else:
-                color_table = list(pad(palette, 16, padvalue=self.UNUSED_COLOR))
-                logger.debug(f"loaded color table in compose_instrumental: {color_table}")
-                self.writer.queue_packets(load_color_table(
-                    color_table,
-                ))
+            logger.debug(f"loaded color table in compose_instrumental: {self.color_table}")
+            if self.config.border is not None:
+                self.writer.queue_packet(border_preset(self.BORDER))
 
-            logger.debug("drawing instrumental text")
-            # Queue text packets
-            self.writer.queue_packets(text_image_packets)
-
-            logger.debug(
-                "rendering instrumental text over background image"
-            )
-            # HACK To properly draw and layer everything, I need to
-            # create a version of the background image that has the text
-            # overlaid onto it, and is tile-aligned. This requires some
-            # juggling.
-            padleft = instrumental.x % CDG_TILE_WIDTH
-            padright = -(
-                instrumental.x + background_image.width
-            ) % CDG_TILE_WIDTH
-            padtop = instrumental.y % CDG_TILE_HEIGHT
-            padbottom = -(
-                instrumental.y + background_image.height
-            ) % CDG_TILE_HEIGHT
-            logger.debug(
-                f"padding L={padleft} R={padright} T={padtop} B={padbottom}"
-            )
-            # Create axis-aligned background image with proper size and
-            # palette
-            aligned_background_image = Image.new(
-                "P",
-                (
-                    background_image.width + padleft + padright,
-                    background_image.height + padtop + padbottom,
-                ),
-                0,
-            )
-            aligned_background_image.putpalette(background_image.getpalette())
-            # Paste background image onto axis-aligned image
-            aligned_background_image.paste(background_image, (padleft, padtop))
-            # Paste existing screen text onto axis-aligned image
-            aligned_background_image.paste(
-                screen,
-                (padleft - instrumental.x, padtop - instrumental.y),
-                # NOTE This masks out the 0 pixels.
-                mask=screen.point(lambda v: v and 255, mode="1"),
-            )
-
-            # Render background image to packets
-            packets = image_to_packets(
-                aligned_background_image,
-                (instrumental.x - padleft, instrumental.y - padtop),
-                background=screen.crop((
-                    instrumental.x - padleft,
-                    instrumental.y - padtop,
-                    instrumental.x - padleft + aligned_background_image.width,
-                    instrumental.y - padtop + aligned_background_image.height,
-                )),
-            )
-            logger.debug(
-                "instrumental background image packed in "
-                f"{len(list(it.chain(*packets.values())))} packet(s)"
-            )
-
-            logger.debug("applying instrumental transition")
-            # Queue background image packets (and apply transition)
-            if instrumental.transition is None:
-                for coord_packets in packets.values():
-                    self.writer.queue_packets(coord_packets)
-            else:
-                transition = Image.open(
-                    package_dir / "transitions" / f"{instrumental.transition}.png"
-                )
-                for coord in self._gradient_to_tile_positions(transition):
-                    self.writer.queue_packets(packets.get(coord, []))
-
-        if end is None:
-            logger.debug("this instrumental will last \"forever\"")
-            return
-
-        # Wait until 3 seconds before the next line should be drawn
-        current_time = (
-            self.writer.packets_queued - self.sync_offset
-            - self.intro_delay
-        )
-        preparation_time = 3 * CDG_FPS  # 3 seconds * 300 frames per second = 900 frames
-        end_time = max(current_time, end - preparation_time)
-        wait_time = end_time - current_time
-        
-        logger.debug(f"waiting for {wait_time} frame(s) before showing next lyrics")
-        self.writer.queue_packets(
-            [no_instruction()] * wait_time
-        )
-
-        # Clear the screen for the next lyrics
-        self.writer.queue_packets([
-            *memory_preset_repeat(self.BACKGROUND),
-            *load_color_table(self.color_table),
-        ])
-        logger.debug(f"loaded color table in compose_instrumental: {self.color_table}")
-        if self.config.border is not None:
-            self.writer.queue_packet(border_preset(self.BORDER))
-
-        logger.debug("instrumental section ended")
+            logger.debug("instrumental section ended")
+        except Exception as e:
+            logger.error(f"Error in _compose_instrumental: {str(e)}", exc_info=True)
+            raise
 
     def _compose_intro(self):
         # TODO Make it so the intro screen is not hardcoded

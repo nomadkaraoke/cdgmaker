@@ -81,20 +81,24 @@ def detect_instrumentals(lyrics_data):
         if gap >= INSTRUMENTAL_GAP_THRESHOLD:
             instrumental_start = current_end + 200  # Add 2 seconds (200 centiseconds) delay
             instrumental_duration = (gap - 200) // 100  # Convert to seconds
-            instrumentals.append({
-                "sync": instrumental_start,
-                "wait": True,
-                "text": f"{DEFAULT_INSTRUMENTAL_TEXT}\n{instrumental_duration} seconds\n",
-                "text_align": "center",
-                "text_placement": "bottom middle",
-                "line_tile_height": DEFAULT_LINE_TILE_HEIGHT,
-                "fill": INSTRUMENTAL_FONT_COLOR,
-                "stroke": "",
-                "image": INSTRUMENTAL_BACKGROUND,
-                "transition": INSTRUMENTAL_TRANSITION,
-            })
-            logger.info(f"Detected instrumental: Gap of {gap} cs, starting at {instrumental_start} cs, duration {instrumental_duration} seconds")
-    
+            instrumentals.append(
+                {
+                    "sync": instrumental_start,
+                    "wait": True,
+                    "text": f"{DEFAULT_INSTRUMENTAL_TEXT}\n{instrumental_duration} seconds\n",
+                    "text_align": "center",
+                    "text_placement": "bottom middle",
+                    "line_tile_height": DEFAULT_LINE_TILE_HEIGHT,
+                    "fill": INSTRUMENTAL_FONT_COLOR,
+                    "stroke": "",
+                    "image": INSTRUMENTAL_BACKGROUND,
+                    "transition": INSTRUMENTAL_TRANSITION,
+                }
+            )
+            logger.info(
+                f"Detected instrumental: Gap of {gap} cs, starting at {instrumental_start} cs, duration {instrumental_duration} seconds"
+            )
+
     logger.info(f"Total instrumentals detected: {len(instrumentals)}")
     return instrumentals
 
@@ -110,11 +114,10 @@ def generate_toml(lrc_file, audio_file, title, artist, output_file, row, line_ti
         logger.error(f"No lyrics data found in the LRC file: {lrc_file}")
         return
 
-    formatted_lyrics = format_lyrics(lyrics_data)
-    print(formatted_lyrics)
+    instrumentals = detect_instrumentals(lyrics_data)
+    formatted_lyrics = format_lyrics(lyrics_data, instrumentals)
 
     sync_times = [lyric["timestamp"] for lyric in lyrics_data]
-    instrumentals = detect_instrumentals(lyrics_data)
 
     toml_data = {
         "title": title,
@@ -191,44 +194,58 @@ def wrap_text(text, max_width, font):
     return lines
 
 
-def format_lyrics(lyrics_data):
+def format_lyrics(lyrics_data, instrumentals):
     formatted_lyrics = []
     font = get_font()
     logger.debug(f"Using font: {font}")
 
     current_line = ""
-    for lyric in lyrics_data:
+    for i, lyric in enumerate(lyrics_data):
         text = lyric["text"]
-        logger.debug(f"Original lyric text: {text}")
+        timestamp = lyric["timestamp"]
+        # logger.debug(f"Original lyric text: {text}")
 
         if text.startswith("/"):
             # Start a new line when encountering a slash
             if current_line:
                 wrapped_text = get_wrapped_text(current_line.strip(), font, CDG_VISIBLE_WIDTH)
-                logger.debug(f"Wrapped text: {wrapped_text}")
+                # logger.debug(f"Wrapped text: {wrapped_text}")
                 formatted_lyrics.extend(wrapped_text.split("\n"))
                 current_line = ""
             text = text[1:]
 
         current_line += text + " "
 
-    # Wrap and add the last line if it exists
-    if current_line:
-        wrapped_text = get_wrapped_text(current_line.strip(), font, CDG_VISIBLE_WIDTH)
-        logger.debug(f"Wrapped text: {wrapped_text}")
-        formatted_lyrics.extend(wrapped_text.split("\n"))
+        # Check if this is the last lyric before an instrumental
+        is_last_before_instrumental = any(
+            inst["sync"] > timestamp and (i == len(lyrics_data) - 1 or lyrics_data[i + 1]["timestamp"] > inst["sync"])
+            for inst in instrumentals
+        )
+
+        if is_last_before_instrumental or i == len(lyrics_data) - 1:
+            # Wrap and add the current line
+            if current_line:
+                wrapped_text = get_wrapped_text(current_line.strip(), font, CDG_VISIBLE_WIDTH)
+                # logger.debug(f"Wrapped text: {wrapped_text}")
+                formatted_lyrics.extend(wrapped_text.split("\n"))
+                current_line = ""
+
+            # If it's the last before instrumental, add extra newlines
+            if is_last_before_instrumental:
+                formatted_lyrics.extend(["~"] * 4)
+                logger.debug("Added 4 empty lines before instrumental")
 
     # Add empty lines where appropriate
     final_lyrics = []
     for line in formatted_lyrics:
         final_lyrics.append(line)
-        logger.debug(f"Added line to final_lyrics: {line}")
-        if line.endswith(("!", "?", ".")):
+        # logger.debug(f"Added line to final_lyrics: {line}")
+        if line.endswith(("!", "?", ".")) and not line == "~":
             final_lyrics.append("~")
             logger.debug("Added empty line after punctuation")
 
     result = "\n".join(final_lyrics)
-    logger.debug(f"Final formatted lyrics:\n{result}")
+    # logger.debug(f"Final formatted lyrics:\n{result}")
     return result
 
 
