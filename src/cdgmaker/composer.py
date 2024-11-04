@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import sys
 import tomllib
-from typing import NamedTuple, Self, TYPE_CHECKING, cast
+from typing import NamedTuple, Self, TYPE_CHECKING, cast, Iterable, TypeVar
 from zipfile import ZipFile
 if TYPE_CHECKING:
     from _typeshed import FileDescriptorOrPath, StrOrBytesPath
@@ -27,6 +27,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 package_dir = Path(__file__).parent
+
+T = TypeVar('T')
+
+def batched(iterable: Iterable[T], n: int) -> Iterable[tuple[T, ...]]:
+    "Batch data into tuples of length n. The last batch may be shorter."
+    # batched('ABCDEFG', 3) --> ABC DEF G
+    it = iter(iterable)
+    while True:
+        batch = tuple(it.islice(n))
+        if not batch:
+            return
+        yield batch
 
 def file_relative_to(
         filepath: "StrOrBytesPath | Path",
@@ -1417,7 +1429,7 @@ class KaraokeComposer:
                 logger.debug(f"loaded color table in compose_instrumental: {color_table}")
             else:
                 # Queue palette packets
-                palette = list(it.batched(background_image.getpalette(), 3))
+                palette = list(batched(background_image.getpalette(), 3))
                 if len(palette) < 8:
                     color_table = list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
                     logger.debug(f"loaded color table in compose_instrumental: {color_table}")
@@ -1615,7 +1627,7 @@ class KaraokeComposer:
         )
 
         # Queue palette packets
-        palette = list(it.batched(background_image.getpalette(), 3))
+        palette = list(batched(background_image.getpalette(), 3))
         if len(palette) < 8:
             color_table = list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
             logger.debug(f"loaded color table in compose_intro: {color_table}")
@@ -1744,7 +1756,7 @@ class KaraokeComposer:
         )
 
         # Queue palette packets
-        palette = list(it.batched(background_image.getpalette(), 3))
+        palette = list(batched(background_image.getpalette(), 3))
         if len(palette) < 8:
             self.writer.queue_packet(load_color_table_lo(
                 list(pad(palette, 8, padvalue=self.UNUSED_COLOR))
@@ -1823,7 +1835,7 @@ class KaraokeComposer:
             )
 
         logger.debug(
-            f"palette: {list(it.batched(image.getpalette(), 3))!r}"
+            f"palette: {list(batched(image.getpalette(), 3))!r}"
         )
 
         logger.debug("masking out non-transparent parts of image")
