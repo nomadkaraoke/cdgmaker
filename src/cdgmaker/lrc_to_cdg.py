@@ -30,7 +30,7 @@ ARTIST_COLOR = "#ffdf6b"
 FONT = "/Users/andrew/AvenirNext-Bold.ttf"
 TITLE_SCREEN_BACKGROUND = "/Users/andrew/cdg-title-screen-background-nomad-simple.png"
 
-logging.basicConfig(level=logging.DEBUG)
+# Instead, create a logger specific to this module
 logger = logging.getLogger(__name__)
 
 # Add new constants for default values
@@ -303,6 +303,14 @@ def generate_cdg(
 
     This function can be called from other Python code to generate CDG files.
     """
+    # Set up logging for this function if it hasn't been configured
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)  # Set to INFO by default, can be changed
+
     toml_file = f"{Path(lrc_file).stem}.toml"
     generate_toml(lrc_file, audio_file, title, artist, toml_file, row, line_tile_height, lines_per_page, title_color, artist_color)
 
@@ -319,6 +327,9 @@ def cli_main():
     """
     Command-line interface entry point for the lrc2cdg tool.
     """
+    # Set up logging for CLI use
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
     parser = argparse.ArgumentParser(description="Convert LRC file to CDG")
     parser.add_argument("lrc_file", help="Path to the LRC file")
     parser.add_argument("audio_file", help="Path to the audio file")
