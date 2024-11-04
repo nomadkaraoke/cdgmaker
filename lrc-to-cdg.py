@@ -47,6 +47,15 @@ INSTRUMENTAL_BACKGROUND = "/Users/andrew/cdg-instrumental-background-nomad-notes
 INSTRUMENTAL_TRANSITION = "cdginstrumentalwipepatternnomad"
 INSTRUMENTAL_FONT_COLOR = "#ffdf6b"
 
+# Add this constant near the top of the file with other constants
+LEAD_IN_THRESHOLD = 300  # 3 seconds in centiseconds
+LEAD_IN_OFFSET = 200  # 2 seconds in centiseconds
+
+# Modify these constants near the top of the file
+LEAD_IN_SYMBOLS = ["/⬜", "⬜", "⬜", "⬜"]
+LEAD_IN_DURATION = 30  # 300 ms in centiseconds
+LEAD_IN_TOTAL = 200  # 2 seconds in centiseconds
+
 
 def parse_lrc(lrc_file):
     with open(lrc_file, "r", encoding="utf-8") as f:
@@ -114,10 +123,27 @@ def generate_toml(lrc_file, audio_file, title, artist, output_file, row, line_ti
         logger.error(f"No lyrics data found in the LRC file: {lrc_file}")
         return
 
-    instrumentals = detect_instrumentals(lyrics_data)
-    formatted_lyrics = format_lyrics(lyrics_data, instrumentals)
+    sync_times = []
+    formatted_lyrics = []
 
-    sync_times = [lyric["timestamp"] for lyric in lyrics_data]
+    for i, lyric in enumerate(lyrics_data):
+        logger.debug(f"Processing lyric {i}: timestamp {lyric['timestamp']}, text '{lyric['text']}'")
+
+        if i == 0 or lyric["timestamp"] - lyrics_data[i - 1]["timestamp"] >= LEAD_IN_THRESHOLD:
+            lead_in_start = lyric["timestamp"] - LEAD_IN_TOTAL
+            logger.debug(f"Adding lead-in before lyric {i} at timestamp {lead_in_start}")
+            for j, symbol in enumerate(LEAD_IN_SYMBOLS):
+                sync_time = lead_in_start + j * LEAD_IN_DURATION
+                sync_times.append(sync_time)
+                formatted_lyrics.append(symbol)
+                logger.debug(f"  Added lead-in symbol {j+1}: '{symbol}' at {sync_time}")
+
+        sync_times.append(lyric["timestamp"])
+        formatted_lyrics.append(lyric["text"])
+        logger.debug(f"Added lyric: '{lyric['text']}' at {lyric['timestamp']}")
+
+    instrumentals = detect_instrumentals(lyrics_data)
+    formatted_lyrics = format_lyrics(formatted_lyrics, instrumentals, sync_times)
 
     toml_data = {
         "title": title,
@@ -194,7 +220,7 @@ def wrap_text(text, max_width, font):
     return lines
 
 
-def format_lyrics(lyrics_data, instrumentals):
+def format_lyrics(lyrics_data, instrumentals, sync_times):
     formatted_lyrics = []
     font = get_font()
     logger.debug(f"Using font: {font}")
@@ -203,9 +229,8 @@ def format_lyrics(lyrics_data, instrumentals):
     lines_on_page = 0
     page_number = 1
 
-    for i, lyric in enumerate(lyrics_data):
-        text = lyric["text"]
-        timestamp = lyric["timestamp"]
+    for i, text in enumerate(lyrics_data):
+        logger.debug(f"Processing text {i}: '{text}' (sync time: {sync_times[i]})")
 
         if text.startswith("/"):
             if current_line:
@@ -222,10 +247,10 @@ def format_lyrics(lyrics_data, instrumentals):
             text = text[1:]
 
         current_line += text + " "
+        logger.debug(f"Current line: '{current_line}'")
 
         is_last_before_instrumental = any(
-            inst["sync"] > timestamp and (i == len(lyrics_data) - 1 or lyrics_data[i + 1]["timestamp"] > inst["sync"])
-            for inst in instrumentals
+            inst["sync"] > sync_times[i] and (i == len(sync_times) - 1 or sync_times[i + 1] > inst["sync"]) for inst in instrumentals
         )
 
         if is_last_before_instrumental or i == len(lyrics_data) - 1:
