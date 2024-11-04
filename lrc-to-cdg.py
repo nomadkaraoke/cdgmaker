@@ -52,7 +52,7 @@ LEAD_IN_THRESHOLD = 300  # 3 seconds in centiseconds
 LEAD_IN_OFFSET = 200  # 2 seconds in centiseconds
 
 # Modify these constants near the top of the file
-LEAD_IN_SYMBOLS = ["/⬜", "⬜", "⬜", "⬜"]
+LEAD_IN_SYMBOLS = ["/>", ">", ">", ">"]
 LEAD_IN_DURATION = 30  # 300 ms in centiseconds
 LEAD_IN_TOTAL = 200  # 2 seconds in centiseconds
 
