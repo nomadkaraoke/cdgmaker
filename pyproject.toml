@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cdgmaker"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
   { name="Josiah Winslow", email="winslowjosiah@gmail.com" },
 ]
@@ -21,7 +21,8 @@ dependencies = [
     "cattrs==24.1.2",
     "Pillow==10.4.0",
     "pydub==0.25.1",
-    "toml>=0.10"
+    "toml>=0.10",
+    "argparse>=1.4.0"
 ]
 
 [project.urls]
@@ -36,3 +37,4 @@ cdgmaker = ["fonts/*", "images/*", "transitions/*"]
 
 [project.scripts]
 cdgmaker = "cdgmaker.composer:main"
+lrc2cdg = "cdgmaker.lrc_to_cdg:cli_main"

@@ -287,20 +287,38 @@ def format_lyrics(lyrics_data, instrumentals, sync_times):
     return result
 
 
-def main(lrc_file, audio_file, title, artist, row, line_tile_height, lines_per_page, title_color, artist_color):
+def generate_cdg(
+    lrc_file,
+    audio_file,
+    title,
+    artist,
+    row=DEFAULT_ROW,
+    line_tile_height=DEFAULT_LINE_TILE_HEIGHT,
+    lines_per_page=DEFAULT_LINES_PER_PAGE,
+    title_color=TITLE_COLOR,
+    artist_color=ARTIST_COLOR,
+):
+    """
+    Generate a CDG file from an LRC file and audio file.
+
+    This function can be called from other Python code to generate CDG files.
+    """
     toml_file = f"{Path(lrc_file).stem}.toml"
     generate_toml(lrc_file, audio_file, title, artist, toml_file, row, line_tile_height, lines_per_page, title_color, artist_color)
 
-    # Run cdgmaker
     try:
         kc = KaraokeComposer.from_file(toml_file)
         kc.compose()
         logger.info("CDG file generated successfully")
     except Exception as e:
         logger.error(f"Error composing CDG: {e}")
+        raise
 
 
-if __name__ == "__main__":
+def cli_main():
+    """
+    Command-line interface entry point for the lrc2cdg tool.
+    """
     parser = argparse.ArgumentParser(description="Convert LRC file to CDG")
     parser.add_argument("lrc_file", help="Path to the LRC file")
     parser.add_argument("audio_file", help="Path to the audio file")
@@ -312,14 +330,9 @@ if __name__ == "__main__":
     parser.add_argument("--title-color", default=TITLE_COLOR, help="Color of the title text on the intro screen")
     parser.add_argument("--artist-color", default=ARTIST_COLOR, help="Color of the artist text on the intro screen")
 
-    # If no arguments are provided, print help and exit
-    if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
-
     args = parser.parse_args()
 
-    main(
+    generate_cdg(
         args.lrc_file,
         args.audio_file,
         args.title,
@@ -330,3 +343,7 @@ if __name__ == "__main__":
         args.title_color,
         args.artist_color,
     )
+
+
+if __name__ == "__main__":
+    cli_main()
